@@ -76,6 +76,37 @@ npx serve .
 | JavaScript (vanilla) | SPA routing, search, theme toggle |
 | Google Fonts | Inter (body) + JetBrains Mono (code) |
 
+## Deploy to GitHub Pages
+
+This repo is ready to deploy as a GitHub Pages site with a custom domain.
+
+### 1. Enable GitHub Pages
+
+Go to **Settings → Pages** in your GitHub repo and set:
+
+- **Source**: `Deploy from a branch`
+- **Branch**: `main` (root `/`)
+
+### 2. Add CNAME record on Cloudflare
+
+In your Cloudflare dashboard for `apricity.com.vn`, add:
+
+| Type | Name | Target |
+| ---- | ---- | ------ |
+| CNAME | `docs` | `<your-github-username>.github.io` |
+
+> Make sure the proxy status is **DNS only** (grey cloud) — GitHub Pages handles its own TLS.
+
+### 3. Verify
+
+After DNS propagates (usually a few minutes), your docs will be live at:
+
+```
+https://docs.apricity.com.vn
+```
+
+GitHub will also auto-provision a free TLS certificate for the custom domain.
+
 ## File Structure
 
 ```
@@ -84,6 +115,7 @@ Apricity-GitBook/
 ├── styles.css      # Design system with dark/light theme tokens
 ├── pages.js        # All 17 documentation pages as content objects
 ├── app.js          # SPA router, search, theme toggle, mobile sidebar
+├── CNAME           # Custom domain for GitHub Pages
 ├── LICENSE
 └── README.md
 ```
