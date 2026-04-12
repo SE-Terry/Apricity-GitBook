@@ -58,6 +58,7 @@ introduction: `
       <tbody>
         <tr><td><a href="#" data-page="quickstart">Quick Start</a></td><td>Get both services running locally in 5 minutes</td></tr>
         <tr><td><a href="#" data-page="architecture">Architecture</a></td><td>High-level system topology and data flow</td></tr>
+        <tr><td><a href="#" data-page="frontend-checkout-flow">Checkout &amp; Shipment</a></td><td>Live GHTK fee quote, fallback logic, and order submission flow</td></tr>
         <tr><td><a href="#" data-page="api-products">Products API</a></td><td>Catalog &amp; inventory endpoints</td></tr>
         <tr><td><a href="#" data-page="api-payments">Payments API</a></td><td>SePay QR bank-transfer flow</td></tr>
         <tr><td><a href="#" data-page="deployment-docker">Deployment</a></td><td>Docker, Compose, and Cloudflare Tunnel guides</td></tr>
@@ -123,11 +124,13 @@ architecture: `
 
   <h3>Order Lifecycle</h3>
   <ol>
-    <li>Customer fills checkout form on the frontend</li>
-    <li>Frontend calls <code>POST /api/pancake-orders/orders</code> to create the order in Pancake POS</li>
-    <li>If payment is bank transfer, frontend calls <code>POST /api/payments/sepay/create</code> to generate a SePay QR code</li>
-    <li>SePay sends an IPN webhook to <code>POST /api/payments/sepay/ipn</code> when payment is confirmed</li>
-    <li>Backend sends order confirmation email via SMTP</li>
+    <li>Customer fills checkout form, selects Province/City and Ward/Commune, and the frontend loads district metadata from Pancake in the background.</li>
+    <li>Once the address is specific enough, the frontend debounces a live quote request to <code>GET /api/shipping/fee</code> for the GHTK shipping fee.</li>
+    <li>If the quote succeeds, the checkout summary uses the returned fee; if the quote fails, the UI falls back to the store default shipping fee.</li>
+    <li>Before submission, the frontend calls <code>POST /api/pancake-products/inventory/check</code> to validate stock in real time.</li>
+    <li>For COD, the frontend calls <code>POST /api/pancake-orders/orders</code>; for bank transfer, it calls <code>POST /api/payments/sepay/create</code>.</li>
+    <li>After the Pancake order is created, the backend attempts to arrange shipment with GHTK using Pancake's <code>arrange_shipment</code> flow (<code>partner_id = 1</code>).</li>
+    <li>If payment is SePay, SePay sends an IPN webhook to <code>POST /api/payments/sepay/ipn</code> when payment is confirmed, and the backend then finalizes downstream actions such as email confirmation.</li>
   </ol>
 
   <h3>Inventory Validation</h3>
@@ -508,6 +511,11 @@ app.use("/api/pancake-address",  pancakeAddressRouter);</pre>
     Append <code>?debug=1</code> to the URL or pass <code>"debug": true</code> in the body to receive the Pancake shipping address in the response.
   </div>
 
+  <div class="callout callout-tip">
+    <div class="callout-title">🚚 Shipment Arrangement</div>
+    After a storefront order is successfully created, the backend attempts to arrange shipment through Pancake using GHTK as the default partner (<code>partner_id = 1</code>). The storefront-calculated <code>shippingFee</code> is included in the order payload, so the order and shipment flow stay aligned.
+  </div>
+
   <hr>
 
   <h2>Admin Orders — <code>/api/pancake-orders</code></h2>
@@ -676,7 +684,7 @@ app.use("/api/pancake-address",  pancakeAddressRouter);</pre>
 
   <div class="callout callout-tip">
     <div class="callout-title">💡 Checkout Flow</div>
-    The frontend uses a 2-level hierarchy for the checkout address: Province → Commune. The district level is available but currently bypassed in the checkout form for simplicity.
+    The checkout UI still exposes a 2-level selector: Province/City → Ward/Commune. However, after a province is selected the frontend also loads district data in the background so it can derive <code>districtId</code> / district name for Pancake order payloads and GHTK fee quoting.
   </div>
 
   <div class="page-nav">
@@ -1027,6 +1035,97 @@ const CollectionPage = lazy(() => import('@/pages/Collection'))
       <span class="label">← Previous</span>
       <span class="title">Frontend Overview</span>
     </a>
+    <a class="page-nav-btn next" data-page="frontend-checkout-flow" href="#">
+      <span class="label">Next →</span>
+      <span class="title">Checkout &amp; Shipment</span>
+    </a>
+  </div>
+</div>
+`,
+
+/* =========================================================
+   FRONTEND CHECKOUT FLOW
+   ========================================================= */
+"frontend-checkout-flow": `
+<div class="page">
+  <div class="page-header">
+    <div class="breadcrumb">Frontend</div>
+    <h1>Checkout &amp; Shipment Flow</h1>
+    <p class="subtitle">End-to-end flow for Pancake address lookup, live GHTK shipping quotes, and order submission from the checkout page.</p>
+  </div>
+
+  <h2>Primary Files</h2>
+  <div class="table-wrapper">
+    <table>
+      <thead><tr><th>File</th><th>Responsibility</th></tr></thead>
+      <tbody>
+        <tr><td><code>pages/Checkout/index.tsx</code></td><td>Owns fee fetching, debounce logic, order submission, and SePay branching</td></tr>
+        <tr><td><code>components/checkout-section/customer-information/customer-information-section.tsx</code></td><td>Loads Pancake provinces, communes, and background district metadata</td></tr>
+        <tr><td><code>components/checkout-section/shipping-information/shipping-information-section.tsx</code></td><td>Shows the live fee, loading state, and fallback/error note</td></tr>
+        <tr><td><code>components/checkout-section/checkout-summary/checkout-summary-section.tsx</code></td><td>Displays subtotal, shipping fee, total, and submit CTA</td></tr>
+        <tr><td><code>config/shipping.ts</code></td><td>Defines the default fallback fee (<code>BASE_SHIPPING_FEE = 24000</code>)</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2>Address Mapping</h2>
+  <p>The visible checkout form stays intentionally simple, but the store keeps extra derived fields so Pancake and GHTK can receive the data shape they expect.</p>
+  <div class="table-wrapper">
+    <table>
+      <thead><tr><th>Checkout UI</th><th>Stored Value</th><th>Used For</th></tr></thead>
+      <tbody>
+        <tr><td>Tỉnh / Thành phố</td><td><code>customerInfo.city</code>, <code>provinceId</code>, <code>provinceLegacyId</code></td><td>Displayed address, Pancake shipping address, GHTK <code>province</code> param</td></tr>
+        <tr><td>Phường / Xã</td><td><code>customerInfo.commune</code>, <code>communeId</code>, <code>communeLegacyId</code></td><td>Displayed address and GHTK <code>ward</code> param</td></tr>
+        <tr><td>Derived quận / huyện</td><td><code>customerInfo.province</code>, <code>districtId</code>, <code>districtLegacyId</code></td><td>Pancake district fields and GHTK <code>district</code> param</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout callout-info">
+    <div class="callout-title">ℹ️ District Fallback</div>
+    When Pancake's newer address shape does not directly expose a district label that the checkout can use, the frontend falls back to the selected ward/commune name for the GHTK <code>district</code> request parameter. This keeps live fee quoting working even with imperfect address mapping data.
+  </div>
+
+  <h2>Live GHTK Quote Flow</h2>
+  <ol>
+    <li>Customer selects a province. The frontend loads both communes and districts for that province from Pancake.</li>
+    <li>Customer selects a ward/commune. The frontend derives the matching district ID and district name from the cached district list.</li>
+    <li>When <code>city</code> and an effective district value are available, checkout starts a <code>600ms</code> debounce timer.</li>
+    <li>After the debounce window, the frontend calls <code>GET /api/shipping/fee</code> with <code>province</code>, <code>district</code>, optional <code>ward</code>, optional <code>address</code>, <code>weight=500</code>, and <code>value=&lt;subtotal&gt;</code>.</li>
+    <li>While the request is in flight, both the shipping method row and the order summary show a translated “calculating” state.</li>
+    <li>If the API returns <code>{ success: true, fee }</code>, the fee is used in the checkout total. If the API fails or returns <code>success: false</code>, the UI falls back to the configured base fee and shows a warning note that the live GHTK quote is unavailable.</li>
+  </ol>
+
+  <div class="code-block">
+    <div class="code-block-header"><span>HTTP sequence</span><button class="code-block-copy" onclick="copyCode(this)">Copy</button></div>
+    <pre>GET /api/pancake-address/provinces
+GET /api/pancake-address/communes/:provinceId
+GET /api/pancake-address/districts/:provinceId
+GET /api/shipping/fee?province=...&amp;district=...&amp;ward=...&amp;address=...&amp;weight=500&amp;value=&lt;subtotal&gt;</pre>
+  </div>
+
+  <h2>Order Submission Paths</h2>
+  <ol>
+    <li>The checkout validates required fields and normalizes customer input.</li>
+    <li>It runs inventory validation with <code>POST /api/pancake-products/inventory/check</code>. If stock changed, the cart is reconciled and order submission stops until the customer reviews it.</li>
+    <li>For COD, the frontend submits <code>POST /api/pancake-orders/orders</code> with the resolved <code>shippingFee</code>, full address, Pancake IDs, and cart items.</li>
+    <li>For bank transfer, the frontend submits <code>POST /api/payments/sepay/create</code> with the same order context and then redirects to <code>/bank-transfer</code> for QR payment.</li>
+    <li>On the backend, Pancake order creation is followed by shipment arrangement through GHTK when order creation succeeds.</li>
+  </ol>
+
+  <h2>Operational Notes</h2>
+  <ul>
+    <li>The frontend intentionally does not block checkout when the live GHTK quote fails; it uses the default fee so order creation can still continue.</li>
+    <li>The summary total is recalculated immediately whenever the dynamic fee changes.</li>
+    <li>The shipping quote request is aborted and replaced whenever the customer changes address inputs again before the previous quote completes.</li>
+    <li>The frontend expects a backend <code>GET /api/shipping/fee</code> endpoint; if that integration is missing or temporarily unavailable, the fallback fee path becomes the default behavior.</li>
+  </ul>
+
+  <div class="page-nav">
+    <a class="page-nav-btn prev" data-page="frontend-routes" href="#">
+      <span class="label">← Previous</span>
+      <span class="title">Pages &amp; Routes</span>
+    </a>
     <a class="page-nav-btn next" data-page="frontend-components" href="#">
       <span class="label">Next →</span>
       <span class="title">Components</span>
@@ -1080,16 +1179,16 @@ const CollectionPage = lazy(() => import('@/pages/Collection'))
         <tr><td><strong>mannequin-section</strong></td><td>Home</td><td>Visual mannequin showcase with drag-and-drop</td></tr>
         <tr><td><strong>about-us-section</strong></td><td>Home / About</td><td>Brand story content block</td></tr>
         <tr><td><strong>pancake-products-section</strong></td><td>Collection</td><td>Paginated product grid with category filters</td></tr>
-        <tr><td><strong>checkout-section</strong></td><td>Checkout</td><td>Multi-step checkout form (customer info, address, items)</td></tr>
+        <tr><td><strong>checkout-section</strong></td><td>Checkout</td><td>Multi-step checkout form with customer info, Pancake address lookup, live GHTK fee state, and payment branching</td></tr>
         <tr><td><strong>payment-section</strong></td><td>BankTransfer / CardPayment</td><td>Payment UI and status polling components</td></tr>
       </tbody>
     </table>
   </div>
 
   <div class="page-nav">
-    <a class="page-nav-btn prev" data-page="frontend-routes" href="#">
+    <a class="page-nav-btn prev" data-page="frontend-checkout-flow" href="#">
       <span class="label">← Previous</span>
-      <span class="title">Pages & Routes</span>
+      <span class="title">Checkout &amp; Shipment</span>
     </a>
     <a class="page-nav-btn next" data-page="frontend-state" href="#">
       <span class="label">Next →</span>
@@ -1107,7 +1206,7 @@ const CollectionPage = lazy(() => import('@/pages/Collection'))
   <div class="page-header">
     <div class="breadcrumb">Frontend</div>
     <h1>State & Logic</h1>
-    <p class="subtitle">Core business logic, state management, and API integration in the <code>lib/</code> directory.</p>
+    <p class="subtitle">Core business logic, checkout state management, and API integration in the <code>lib/</code> and <code>pages/Checkout</code> modules.</p>
   </div>
 
   <h2>API Client</h2>
@@ -1137,7 +1236,9 @@ const CollectionPage = lazy(() => import('@/pages/Collection'))
         <tr><td><code>getSePayPayment(orderId)</code></td><td><code>GET /api/payments/sepay/order/:id</code></td></tr>
         <tr><td><code>getSePayPaymentStatus(orderId)</code></td><td><code>GET /api/payments/sepay/status/:id</code></td></tr>
         <tr><td><code>getPancakeProvinces()</code></td><td><code>GET /api/pancake-address/provinces</code></td></tr>
-        <tr><td><code>getPancakeCommunes(pId)</code></td><td><code>GET /api/pancake-address/communes/:pId</code></td></tr>
+        <tr><td><code>getPancakeDistricts(provinceId)</code></td><td><code>GET /api/pancake-address/districts/:provinceId</code></td></tr>
+        <tr><td><code>getPancakeCommunes(pId, districtId?)</code></td><td><code>GET /api/pancake-address/communes/:pId</code></td></tr>
+        <tr><td><code>calculateGHTKShippingFee(params)</code></td><td><code>GET /api/shipping/fee</code></td></tr>
       </tbody>
     </table>
   </div>
@@ -1146,6 +1247,15 @@ const CollectionPage = lazy(() => import('@/pages/Collection'))
   <p>The API client includes a <code>translateKnownUiMessage()</code> function that maps backend error strings to i18n translation keys. This ensures error messages are always displayed in the user's language.</p>
 
   <hr>
+
+  <h2>Checkout Store &amp; Shipping Logic</h2>
+  <p><code>pages/Checkout/store.ts</code> stores customer info, payment method, order code, and derived address IDs. The checkout page then combines that state with live shipping fee data fetched from GHTK.</p>
+  <ul>
+    <li><code>city</code> stores the selected Province/City name, while <code>province</code> stores the derived district name used for shipping integration.</li>
+    <li><code>config/shipping.ts</code> exposes <code>BASE_SHIPPING_FEE</code> and a resolver that prefers the live fee when available.</li>
+    <li><code>pages/Checkout/index.tsx</code> uses an abortable, debounced request flow so stale fee responses do not overwrite newer address input.</li>
+    <li>If the live quote fails, the UI preserves checkout continuity by falling back to the default configured shipping fee.</li>
+  </ul>
 
   <h2>Cart Store</h2>
   <p><code>lib/cart-store.ts</code> — Client-side cart state management with localStorage persistence. Handles:</p>

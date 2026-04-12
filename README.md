@@ -46,6 +46,7 @@ npx serve .
 | ---- | ----------- |
 | Overview | Tech stack, features, project structure |
 | Pages & Routes | Route table, lazy loading, layout components |
+| Checkout & Shipment Flow | Pancake address lookup, live GHTK fee quote, order submission paths |
 | Components | Layout, UI, and section-level component reference |
 | State & Logic | API client, cart store, inventory module, error handling |
 | Internationalization | i18next setup, translation key structure, adding new translations |
@@ -113,7 +114,7 @@ GitHub will also auto-provision a free TLS certificate for the custom domain.
 Apricity-GitBook/
 ├── index.html      # Main HTML shell (sidebar, nav, script tags)
 ├── styles.css      # Design system with dark/light theme tokens
-├── pages.js        # All 17 documentation pages as content objects
+├── pages.js        # All 18 documentation pages as content objects
 ├── app.js          # SPA router, search, theme toggle, mobile sidebar
 ├── CNAME           # Custom domain for GitHub Pages
 ├── LICENSE

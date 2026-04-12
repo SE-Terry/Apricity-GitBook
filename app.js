@@ -28,6 +28,7 @@
         'backend-env',
         'frontend-overview',
         'frontend-routes',
+        'frontend-checkout-flow',
         'frontend-components',
         'frontend-state',
         'frontend-i18n',
