@@ -19,6 +19,7 @@
         'introduction',
         'architecture',
         'quickstart',
+        'shop-operator-guide',
         'backend-overview',
         'api-products',
         'api-orders',

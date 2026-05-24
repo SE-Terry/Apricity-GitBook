@@ -59,6 +59,7 @@ introduction: `
         <tr><td><a href="#" data-page="quickstart">Quick Start</a></td><td>Get both services running locally in 5 minutes</td></tr>
         <tr><td><a href="#" data-page="architecture">Architecture</a></td><td>High-level system topology and data flow</td></tr>
         <tr><td><a href="#" data-page="frontend-checkout-flow">Checkout &amp; Shipment</a></td><td>Live GHTK fee quote, fallback logic, and order submission flow</td></tr>
+        <tr><td><a href="#" data-page="shop-operator-guide">Shop Operator Guide</a></td><td>How to enter Pancake products/categories so the storefront maps them correctly</td></tr>
         <tr><td><a href="#" data-page="api-products">Products API</a></td><td>Catalog &amp; inventory endpoints</td></tr>
         <tr><td><a href="#" data-page="api-payments">Payments API</a></td><td>SePay QR bank-transfer flow</td></tr>
         <tr><td><a href="#" data-page="deployment-docker">Deployment</a></td><td>Docker, Compose, and Cloudflare Tunnel guides</td></tr>
@@ -255,6 +256,129 @@ npm run dev</pre>
       <span class="label">← Previous</span>
       <span class="title">Architecture</span>
     </a>
+    <a class="page-nav-btn next" data-page="shop-operator-guide" href="#">
+      <span class="label">Next →</span>
+      <span class="title">Shop Operator Guide</span>
+    </a>
+  </div>
+</div>
+`,
+
+/* =========================================================
+   SHOP OPERATOR GUIDE
+   ========================================================= */
+"shop-operator-guide": `
+<div class="page">
+  <div class="page-header">
+    <div class="breadcrumb">Getting Started › Operations</div>
+    <h1>Shop Operator Guide</h1>
+    <p class="subtitle">How to enter products and categories in Pancake POS so Apricity's frontend mapping renders the expected catalog, collection, product detail, variants, stock, material, size guide, and images.</p>
+  </div>
+
+  <div class="callout callout-warning">
+    <div class="callout-title">Source of truth</div>
+    Pancake POS is the catalog source of truth. The website does not have a separate product database; it reads Pancake products and categories through <code>/api/pancake-products</code>.
+  </div>
+
+  <h2>Product Setup Checklist</h2>
+  <div class="table-wrapper">
+    <table>
+      <thead><tr><th>Pancake field / area</th><th>Website field</th><th>Operator rule</th></tr></thead>
+      <tbody>
+        <tr><td>Product name</td><td><code>product.name</code></td><td>Customer-facing name shown on cards and detail pages.</td></tr>
+        <tr><td>Product ID or <code>custom_id</code></td><td>Detail URL slug</td><td>Use <code>custom_id</code> when a readable stable URL is needed. Detail lookup accepts Pancake ID first, then falls back to matching <code>custom_id</code>.</td></tr>
+        <tr><td>Product images</td><td>Card/detail gallery</td><td>Add at least one image. The first product image is used as <code>bannerImage</code>; variation images are used in the gallery and can change when the customer selects a variant.</td></tr>
+        <tr><td>Categories</td><td>Collections and filtering</td><td>Assign every product to the correct Pancake category. The storefront treats Pancake root categories as collections and includes descendant category IDs when filtering.</td></tr>
+        <tr><td>Variations</td><td>Colors, sizes, price, stock</td><td>Use exact field names <code>color</code> / <code>màu</code> and <code>size</code>. The website reads stock from each variation's remaining quantity.</td></tr>
+        <tr><td>Retail price on variation</td><td><code>product.price</code></td><td>The displayed product price uses the first non-zero variation retail price found by the mapper.</td></tr>
+        <tr><td>Product description / <code>note_product</code></td><td>Description, size text, material fallback</td><td>Use the JSON format below. The frontend extracts <code>Kích thước:</code> / <code>Size:</code> into the size guide and <code>Chất liệu:</code> / <code>Material:</code> into product information.</td></tr>
+        <tr><td>Product note, material attribute, or materials product endpoint</td><td><code>product.material</code></td><td>Material priority is product note first, then product attribute named <code>material</code>, <code>chất liệu</code>, or <code>fabric</code>, then Pancake materials product data on detail fetch.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2>Description Format</h2>
+  <p>For bilingual product descriptions, paste a JSON object into Pancake's product description / <code>note_product</code> field. The frontend accepts both real JSON and JSON-like pasted text with escaped quotes.</p>
+  <div class="code-block">
+    <div class="code-block-header"><span>Product description template</span><button class="code-block-copy" onclick="copyCode(this)">Copy</button></div>
+    <pre>{
+  "vi": "Túi tote với 2 tầng voan bèo nhún\\nKích thước: 32cm x 20cm\\nChất liệu: Sự kết hợp giữa vải chính kate và vải voan có độ bắt sáng nhẹ với họa tiết hoa ẩn. Bên trong có lớp lót kín đáo, đi kèm cùng một miếng lót đế túi.",
+  "en": "Tote bag with 2 layers of ruffled organza\\nSize: 32cm x 20cm\\nMaterial: A combination of kate fabric as the main material and lightly shimmering organza with subtle hidden floral patterns. The inside is fully lined for coverage and comes with a base insert."
+}</pre>
+  </div>
+
+  <h3>How the website uses description lines</h3>
+  <ul>
+    <li>The remaining text is shown under <strong>Mô tả / Description</strong>.</li>
+    <li>A line starting with <code>Kích thước:</code> or <code>Size:</code> is removed from the description and rendered inside <strong>Bảng kích thước / Size Guide</strong> as text.</li>
+    <li>A line starting with <code>Chất liệu:</code> or <code>Material:</code> is removed from the description and rendered inside <strong>Thông tin sản phẩm / Product Information</strong>.</li>
+    <li>If no size line exists, the website renders its default size table from code.</li>
+  </ul>
+
+  <h2>Variation Rules</h2>
+  <p>Variants drive selectable colors/sizes, stock validation, cart payloads, and selected-image behavior. The backend only maps specific Pancake variation field names.</p>
+  <div class="table-wrapper">
+    <table>
+      <thead><tr><th>Website concept</th><th>Pancake variation field name</th><th>Accepted examples</th><th>Notes</th></tr></thead>
+      <tbody>
+        <tr><td>Color selector</td><td><code>color</code> or <code>màu</code></td><td><code>Pink</code>, <code>#f7cadc</code>, <code>Hồng</code></td><td>Color values are rendered as swatches. Hex values are safest.</td></tr>
+        <tr><td>Size selector</td><td><code>size</code></td><td><code>S</code>, <code>M</code>, <code>L</code>, <code>32cm x 20cm</code></td><td>Do not use <code>kích cỡ</code> or <code>kích thước</code> as the variation field name unless the code is extended.</td></tr>
+        <tr><td>Stock</td><td>Variation quantity / remaining quantity</td><td>Any non-negative number</td><td>Checkout validates this against Pancake before order creation.</td></tr>
+        <tr><td>Price</td><td>Variation retail price</td><td><code>150000</code></td><td>Use VND numeric values. The storefront formats the display.</td></tr>
+        <tr><td>Variant image</td><td>Variation images</td><td>Upload per variation where useful</td><td>Detail page switches image when a selected variant has an image.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>Size table behavior</h3>
+  <ul>
+    <li>If the product description includes <code>Kích thước:</code> / <code>Size:</code>, the size guide shows that text and does not show the hardcoded table.</li>
+    <li>If a clothing product has only <code>S</code> and <code>M</code> variations, the default table uses the S/M range values: S chest 83-86, waist 64-67, hip 88-91; M chest 87-90, waist 68-71, hip 92-95.</li>
+    <li>If a product has <code>S</code>, <code>M</code>, and <code>L</code>, the default table shows the standard S/M/L columns.</li>
+  </ul>
+
+  <h2>Categories as Collections</h2>
+  <p>The collection page is built from Pancake categories. The backend maps each root Pancake category into one storefront collection.</p>
+  <div class="table-wrapper">
+    <table>
+      <thead><tr><th>Pancake category tree item</th><th>Storefront behavior</th><th>Operator rule</th></tr></thead>
+      <tbody>
+        <tr><td>Root category text/name</td><td>Collection name</td><td>Name the root category exactly as the storefront collection should appear.</td></tr>
+        <tr><td>Child node containing an <code>http://</code> or <code>https://</code> URL</td><td>Collection image</td><td>Add one child category/node under the root whose text is the image URL.</td></tr>
+        <tr><td>Child node containing normal text</td><td>Collection description</td><td>Add one child category/node under the root whose text is the collection description. If multiple text children exist, the mapper uses the last one.</td></tr>
+        <tr><td>Root and all descendant category IDs</td><td>Product filtering</td><td>Products assigned to the root or any descendant category are included in that collection.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout callout-tip">
+    <div class="callout-title">Recommended category pattern</div>
+    Create one root category per collection. Under it, keep one image URL child and one description child, then place real merchandising categories below that same root. Assign products to the root or descendants.
+  </div>
+
+  <h2>Images and Upload Links</h2>
+  <ul>
+    <li>Use optimized web images for product media. Large 4000px PNG files should be resized/compressed before upload.</li>
+    <li>For transparent model/cutout assets, keep PNG with alpha. For normal product detail photos, JPEG is usually smaller.</li>
+    <li>If hosting on Cloudflare Pages, place static files under the frontend <code>public/</code> folder. A file at <code>public/images/example.png</code> becomes <code>/images/example.png</code> on the deployed site.</li>
+  </ul>
+
+  <h2>Operator QA Before Publishing</h2>
+  <ol>
+    <li>Open the product on the storefront detail page.</li>
+    <li>Confirm the product card shows name, price, image, and add-to-cart button correctly.</li>
+    <li>Confirm the description does not show raw JSON.</li>
+    <li>Confirm <strong>Chất liệu / Material</strong> appears under product information.</li>
+    <li>Confirm <strong>Bảng kích thước / Size Guide</strong> shows either the extracted size text or the correct S/M/L table.</li>
+    <li>Select every color/size combination and confirm unavailable variants are disabled or stock behaves correctly.</li>
+    <li>Add the product to cart and proceed to checkout far enough to trigger inventory validation.</li>
+  </ol>
+
+  <div class="page-nav">
+    <a class="page-nav-btn prev" data-page="quickstart" href="#">
+      <span class="label">← Previous</span>
+      <span class="title">Quick Start</span>
+    </a>
     <a class="page-nav-btn next" data-page="backend-overview" href="#">
       <span class="label">Next →</span>
       <span class="title">Backend Overview</span>
@@ -336,9 +460,9 @@ app.use("/api/pancake-address",  pancakeAddressRouter);</pre>
   <p>Allowed origins are derived from two env vars: <code>ORIGIN</code> (comma-separated list) and <code>FRONTEND_URL</code>. Both are merged and deduplicated at startup.</p>
 
   <div class="page-nav">
-    <a class="page-nav-btn prev" data-page="quickstart" href="#">
+    <a class="page-nav-btn prev" data-page="shop-operator-guide" href="#">
       <span class="label">← Previous</span>
-      <span class="title">Quick Start</span>
+      <span class="title">Shop Operator Guide</span>
     </a>
     <a class="page-nav-btn next" data-page="api-products" href="#">
       <span class="label">Next →</span>
