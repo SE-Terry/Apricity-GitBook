@@ -27,7 +27,7 @@ npx serve .
 | Introduction | Project overview, features, and quick links |
 | Architecture | System diagram, routing strategy, data flow, repository structure |
 | Quick Start | Step-by-step local setup for both frontend and backend |
-| Shop Operator Guide | Pancake product/category setup rules that match the storefront mapping |
+| Store Guide | Pancake product/category setup rules that match the storefront mapping |
 
 ### Backend — API Reference
 

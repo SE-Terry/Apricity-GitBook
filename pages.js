@@ -59,7 +59,7 @@ introduction: `
         <tr><td><a href="#" data-page="quickstart">Quick Start</a></td><td>Get both services running locally in 5 minutes</td></tr>
         <tr><td><a href="#" data-page="architecture">Architecture</a></td><td>High-level system topology and data flow</td></tr>
         <tr><td><a href="#" data-page="frontend-checkout-flow">Checkout &amp; Shipment</a></td><td>Live GHTK fee quote, fallback logic, and order submission flow</td></tr>
-        <tr><td><a href="#" data-page="shop-operator-guide">Shop Operator Guide</a></td><td>How to enter Pancake products/categories so the storefront maps them correctly</td></tr>
+        <tr><td><a href="#" data-page="shop-operator-guide">Store Guide</a></td><td>How to enter Pancake products/categories so the storefront maps them correctly</td></tr>
         <tr><td><a href="#" data-page="api-products">Products API</a></td><td>Catalog &amp; inventory endpoints</td></tr>
         <tr><td><a href="#" data-page="api-payments">Payments API</a></td><td>SePay QR bank-transfer flow</td></tr>
         <tr><td><a href="#" data-page="deployment-docker">Deployment</a></td><td>Docker, Compose, and Cloudflare Tunnel guides</td></tr>
@@ -258,7 +258,7 @@ npm run dev</pre>
     </a>
     <a class="page-nav-btn next" data-page="shop-operator-guide" href="#">
       <span class="label">Next →</span>
-      <span class="title">Shop Operator Guide</span>
+      <span class="title">Store Guide</span>
     </a>
   </div>
 </div>
@@ -270,8 +270,8 @@ npm run dev</pre>
 "shop-operator-guide": `
 <div class="page">
   <div class="page-header">
-    <div class="breadcrumb">Getting Started › Operations</div>
-    <h1>Shop Operator Guide</h1>
+    <div class="breadcrumb">Getting Started › Store Guide</div>
+    <h1>Store Guide</h1>
     <p class="subtitle">How to enter products and categories in Pancake POS so Apricity's frontend mapping renders the expected catalog, collection, product detail, variants, stock, material, size guide, and images.</p>
   </div>
 
@@ -462,7 +462,7 @@ app.use("/api/pancake-address",  pancakeAddressRouter);</pre>
   <div class="page-nav">
     <a class="page-nav-btn prev" data-page="shop-operator-guide" href="#">
       <span class="label">← Previous</span>
-      <span class="title">Shop Operator Guide</span>
+      <span class="title">Store Guide</span>
     </a>
     <a class="page-nav-btn next" data-page="api-products" href="#">
       <span class="label">Next →</span>
