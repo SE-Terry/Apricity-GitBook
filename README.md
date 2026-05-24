@@ -63,6 +63,7 @@ npx serve .
 
 - 🌗 **Dark / Light theme** — toggle with localStorage persistence
 - 🔍 **Real-time search** — filter sidebar navigation instantly
+- 🌐 **Vietnamese / English docs** — switch from the sidebar, or open with `?lang=vi`
 - 📱 **Responsive** — mobile layout with hamburger sidebar
 - 📋 **Copy code** — one-click copy on all code blocks
 - ⬅️➡️ **Prev / Next navigation** — sequential page browsing

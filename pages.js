@@ -275,7 +275,7 @@ npm run dev</pre>
     <p class="subtitle">How to enter products and categories in Pancake POS so Apricity's frontend mapping renders the expected catalog, collection, product detail, variants, stock, material, size guide, and images.</p>
   </div>
 
-  <div class="callout callout-warning">
+  <div class="callout callout-warn">
     <div class="callout-title">Source of truth</div>
     Pancake POS is the catalog source of truth. The website does not have a separate product database; it reads Pancake products and categories through <code>/api/pancake-products</code>.
   </div>
